@@ -12,7 +12,8 @@ using std::pair;
 using std::string;
 using std::bitset;
 using std::cout;
-
+using std::map;
+using std::set;
 
 class Automaton {
 private:
@@ -26,8 +27,6 @@ private:
         Edge(int v, int to, const char& w) : v(v), to(to), w(w) {}
     };
 
-    
-
     static const size_t MAX_VERTEX = 100;
     static const char eps = '_';
 
@@ -38,7 +37,7 @@ private:
     int start;
     int vertex;
     string alp;
-    vector<vector<Edge>> edges;
+    vector<map<char, int>> edges;
     std::set<int> terms;
 
     static bool get_bit(int mask, int pos) {
@@ -48,11 +47,10 @@ private:
     vector<Edge> get_edges_list(std::set<int> removed = std::set<int>()) {
         vector<Edge> res;
         for (int v = 0; v < vertex; ++v) {
-            for (const Edge& edge : edges[v]) {
-                int v = edge.v;
-                int to = edge.to;
+            for (auto el : edges[v]) {
+                int to = el.second;
                 if (removed.count(v) || removed.count(to)) continue;
-                res.push_back(edge);
+                res.push_back(Edge(v, to, el.first));
             }
         }
         return res;
@@ -78,7 +76,8 @@ private:
         for (const Edge& edge : pairs) {
             int v = lower_bound(xs.begin(), xs.end(), edge.v) - xs.begin();
             int to = lower_bound(xs.begin(), xs.end(), edge.to) - xs.begin();
-            edges[v].push_back(Edge(v, to, edge.w));
+            char w = edge.w;
+            edges[v][w] = to;
         }
         start = lower_bound(xs.begin(), xs.end(), start) - xs.begin();
     }
@@ -91,8 +90,8 @@ private:
         }
         for (int i = 0; i < vertex; ++i) {
             for (int v = 0; v < vertex; ++v) {
-                for (const Edge& edge : edges[v]) {
-                    int to = edge.to;
+                for (auto el : edges[v]) {
+                    int to = el.second;
                     is_reach[v] |= is_reach[to];
                 }
             }
@@ -113,25 +112,39 @@ private:
 
 
 public:
+    Automaton() = default;
+
     Automaton(int vertex, int start, const string& alp, const vector<int>& _terms) 
         : vertex(vertex), start(start), alp(alp) {
             terms = std::set<int> (_terms.begin(), _terms.end());
             edges.resize(vertex);
         }
 
+    int get_vertex() {
+        return vertex;
+    }
+
+    int get_start() {
+        return start;
+    }
+
+    int go(int v, char c) {
+        
+    }
+
     void add_edge(int v, int to, char w) {
-        edges[v].push_back(Edge(v, to, w));
+        edges[v][w] = to;
     }
 
     void remove_eps_edges() {
         vector<bitset<MAX_VERTEX>> is_reach(vertex, 0);
-        vector<vector<Edge>> eps_edges(vertex);
+        vector<vector<int>> eps_edges(vertex);
         for (int v = 0; v < vertex; ++v) {
-            for (const Edge& edge : edges[v]) {
-                int to = edge.to;
-                char w = edge.w;
+            for (auto el : edges[v]) {
+                int to = el.second;
+                char w = el.first;
                 if (is_eps(w)) {
-                    eps_edges[v].push_back(edge);
+                    eps_edges[v].push_back(to);
                 }
             }
             is_reach[v][v] = 1;
@@ -139,8 +152,7 @@ public:
 
         for (int i = 0; i < vertex; ++i) {
             for (int v = 0; v < vertex; ++v) {
-                for (const Edge& edge : eps_edges[v]) {
-                    int to = edge.to;
+                for (int to : eps_edges[v]) {
                     is_reach[v] |= is_reach[to];
                 }
             }
@@ -150,9 +162,9 @@ public:
         for (int v = 0; v < vertex; ++v) {
             for (int u = 0; u < vertex; ++u) {
                 if (is_reach[v][u]) {
-                    for (const Edge& edge : edges[u]) {
-                        int to = edge.to;
-                        char w = edge.w;
+                    for (auto el : edges[v]) {
+                        int to = el.second;
+                        char w = el.first;
                         if (!is_eps(w)) {
                             new_edges[v].push_back(Edge(v, to, w));
                         }
@@ -168,9 +180,10 @@ public:
     bool is_dka() {
         std::set<char> used;
         for (int v = 0; v < vertex; ++v) {
-            for (const Edge& edge : edges[v]) {
-                if (is_eps(edge.w) || used.count(edge.w)) return false;
-                used.insert(edge.w);
+            for (auto el : edges[v]) {
+                char w = el.first;
+                if (is_eps(w) || used.count(w)) return false;
+                used.insert(w);
             }
         }
         return true;
@@ -288,6 +301,7 @@ public:
     friend bool operator!=(const Automaton::Edge& fst, const Automaton::Edge& snd);
 
     friend std::ostream& operator<<(std::ostream& out, const Automaton& aut);
+    friend std::istream& operator>>(std::istream& in, Automaton& aut);
 };
 
 bool operator<(const Automaton::Edge& fst, const Automaton::Edge& snd) {
@@ -316,6 +330,30 @@ bool operator>(const Automaton::Edge& fst, const Automaton::Edge& snd) {
 
 bool operator!=(const Automaton::Edge& fst, const Automaton::Edge& snd) {
     return !(snd == fst);
+}
+
+std::istream& operator>>(std::istream& in, Automaton& aut) {
+    int n, start;
+    string alp;
+    in >> n >> start >> alp;
+    vector<int> terms;
+    int k;
+    in >> k;
+    for (int i = 0; i < k; ++i) {
+        int el;
+        in >> el;
+        terms.push_back(el);
+    }
+    aut = Automaton(n, start, alp, terms);
+    int m;
+    in >> m;
+    for (int i = 0; i < m; ++i) {
+        int v, to;
+        char w;
+        in >> v >> to >> w;
+        aut.add_edge(v, to, w);
+    }
+    return in;
 }
 
 std::ostream& operator<<(std::ostream& out, const Automaton& aut) {
